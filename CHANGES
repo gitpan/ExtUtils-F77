@@ -1,6 +1,18 @@
 ExtUtils::F77 Changes list 
 --------------------------
 
+v1.14 released Jun 15th 2001
+----------------------------
+
+* Diab Jerius' Solaris regex patch
+* Tim Butler's Solaris patch
+* Now prints version on "use"
+* David Meleedy's Solaris patch?
+* My mix and match of all the above
+* Added COPYING file for Licence statement
+* Tim Jeness' latest Solaris patch
+* My own patch to make sure gcclibs are appended for g77
+
 v1.13 released May 8th 2000
 ---------------------------
 

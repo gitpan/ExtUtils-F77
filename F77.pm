@@ -32,7 +32,7 @@ variable F77LIBS, e.g.
 
 =cut
 
-$VERSION = "1.13";
+$VERSION = "1.14";
 
 # Database starts here. Basically we have a large hash specifying
 # entries for each os/compiler combination. Entries can be code refs
@@ -42,6 +42,8 @@ $VERSION = "1.13";
 # Hash key convention is uppercase first letter of
 # hash keys. First key is usually the name of the architecture as
 # returned by Config (modulo ucfirst()).
+
+print "Loaded ExtUtils::F77 version $VERSION\n";
 
 %F77config=();
 
@@ -79,24 +81,49 @@ $F77config{Sunos}{F77}{Cflags} = '-O';
 ### Solaris ###
 
 $F77config{Solaris}{F77}{Link} = sub {
-    my $NSPATH = "";
-    $NSPATH = $ENV{'LD_LIBRARY_PATH'} if defined $ENV{'LD_LIBRARY_PATH'};
-#find the SUNWspro entry of nonstandard inst. in LD_LIBRARY_PATH
-    $NSPATH =~ /\:.*SUNWspro(\/|\:|\b)/;
-    $NSPATH = $& if $&;
-    $NSPATH =~ /.*SUNWspro(\/|\:|\b)/;
-    $NSPATH = $&;
-    $NSPATH =~ /SUNWspro/;
-    $NSPATH = $`;
-    $NSPATH =~ s/://gi;
-    $NSPATH = "/opt/" unless $NSPATH;
-    print "$Pkg: Found non-standard F77 path:--->$NSPATH\n" if $NSPATH ne
-"/opt/";
-       $dir = find_highest_SC("$NSPATH/SUNWspro/SC*/lib");
-       return "" unless $dir; # Failure
-       print "$Pkg: Found Fortran latest version lib dir $dir\n";
-       return "-L$dir -lF77 -lM77 -lsunmath -lm";
-};
+     my $NSPATH;
+     my $dir;
+ 
+     #find the SUNWspro entry of nonstandard inst. in LD_LIBRARY_PATH
+     if ( defined $ENV{'LD_LIBRARY_PATH'} &&
+	  $ENV{'LD_LIBRARY_PATH'} =~ m{([^:]*SUNWspro[^/]*)} )
+     {
+       $NSPATH = $1;
+     }
+
+     elsif ( defined $ENV{'PATH'} ) {
+
+       foreach ( split (/:/,$ENV{PATH}) ) {
+	 if ( m{(.*SUNWspro[^/]*)} ) {
+	   $NSPATH = $1;
+	   last;
+	 }
+       }
+     }
+
+
+     if (defined $NSPATH) {
+
+       print "$Pkg: Found F77 path:--->$NSPATH\n";
+
+       $dir = find_highest_SC("$NSPATH/WS*/lib") ||
+              find_highest_SC("$NSPATH/SC*/lib") ||
+	      find_highest_SC("$NSPATH/sunwspro*/SUNWspro/SC*/lib");
+
+       # that failed.  try $NSPATH/lib. use glob to
+       # match for libF77.*, as libF77.a isn't there anymore?
+       unless ( $dir )
+       {
+	 print "$Pkg: Trying $NSPATH/lib\n";
+	 $dir = "$NSPATH/lib" if glob("$NSPATH/lib/libF77*");
+       }
+	      
+     } else {
+     }
+     return "" unless $dir; # Failure
+     print "$Pkg: Found Fortran latest version lib dir $dir\n";
+     return "-L$dir -lF77 -lM77 -lsunmath -lm";
+ };
 
 
 $F77config{Solaris}{F77}{Trail_} = 1;
@@ -267,6 +294,7 @@ sub import {
    $Pkg    = shift;
    my $system   = ucfirst(shift);  # Set package variables
    my $compiler = ucfirst(shift);
+   $Runtime = "-LSNAFU -lwontwork";
 
    # Guesses if system/compiler not specified.
 
@@ -287,7 +315,11 @@ sub import {
      if (defined( $F77config{$system} )){
      	my $flibs = get ($F77config{$system}{$compiler}{Link});
         if ($flibs ne "") {
-     	   $Runtime = $flibs . gcclibs();
+     	   $Runtime = $flibs;# . gcclibs();
+	   # We don't want to append gcc libs if we are using
+	   # non gnu compilers. Initially, explicitly check for
+	   # use of sun compiler
+	   $Runtime .= gcclibs($flibs) unless $flibs =~ /sunmath/;
 	   $Runtime =~ s|L([a-z,A-Z]):|L//$1|g if $^O =~ /cygwin/i;
            $Runtime = ' ' if $^O eq 'VMS';  # <-- need this space!
 	   print "Runtime: $Runtime\n";
@@ -300,7 +332,7 @@ sub import {
 
      # If it doesn't work try Generic + GNU77
 
-     unless (defined($Runtime) && $ok) {
+      unless (("$Runtime" ne "-LSNAFU -lwontwork") && $ok) {
      	print <<"EOD";
 $Pkg: Unable to guess and/or validate system/compiler configuration
 $Pkg: Will try system=Generic Compiler=G77
@@ -308,7 +340,7 @@ EOD
     	 $system   = "Generic";
     	 $compiler = "G77";
     	 my $flibs = get ($F77config{$system}{$compiler}{Link});
-    	 $Runtime =  $flibs. gcclibs();
+    	 $Runtime =  $flibs . gcclibs($flibs);
     	 $ok = validate_libs($Runtime) if $flibs ne "";
     	 print "$Pkg: Well that didn't appear to validate. Well I will try it anyway.\n"
     	      unless $Runtime && $ok;
@@ -417,7 +449,6 @@ sub any_exists {
 
 # Find highest version number of SCN.N(.N) directories
 # (Nasty SunOS/Solaris naming scheme for F77 libs]
-
 sub find_highest_SC {
     print "$Pkg: Scanning for $_[0]\n";
     my @glob = glob(shift);
@@ -497,6 +528,7 @@ sub testcompiler {
 # Return gcc libs (e.g. -L/usr/local/lib/gcc-lib/sparc-sun-sunos4.1.3_U1/2.7.0 -lgcc)
 
 sub gcclibs {
+   my $flibs = shift; # Fortran libs
    my $isgcc = $Config{'cc'} eq 'gcc';
    if (!$isgcc && $^O ne 'VMS') {
       print "Checking for gcc in disguise:\n";
@@ -510,7 +542,7 @@ sub gcclibs {
       }
       print $string;
    }
-   if ($isgcc) {
+   if ($isgcc or ($flibs =~ /-lg2c/) or ($flibs =~ /-lf2c/) ) {
        $gccdir = `gcc -print-libgcc-file-name`; chomp $gccdir;
        $gccdir =~ s/\/libgcc.a//;
        return " -L$gccdir -lgcc";   
