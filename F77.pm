@@ -32,7 +32,7 @@ variable F77LIBS, e.g.
 
 =cut
 
-$VERSION = "1.11";
+$VERSION = "1.12";
 
 # Database starts here. Basically we have a large hash specifying
 # entries for each os/compiler combination. Entries can be code refs
@@ -168,6 +168,7 @@ $F77config{Hpux}{DEFAULT}     = 'F77';
 # in the ExtUtils::F77 package. It adds the -64 flag and it is supposed to
 # provide the same functionality as the old code for a non -64 abi. 
 
+if (ucfirst($Config{'osname'}) eq "Irix")
 {
   my ($cflags,$mips,$default_abi,$abi,$mips_dir,$libs);
   $cflags = $Config{cc};

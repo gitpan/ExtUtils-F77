@@ -1,6 +1,11 @@
 ExtUtils::F77 Changes list 
 --------------------------
 
+v1.12 released Oct 26th 1999
+----------------------------
+
+* SGI coding suggestion from Tim Jenness to suppress a warning.
+
 v1.11 released Oct 15th 1999
 -----------------------------
 
