@@ -8,5 +8,6 @@ WriteMakefile(
      'NAME'	=> 'ExtUtils::F77',
      'VERSION_FROM'	=> 'F77.pm',  
      'linkext'  => {LINKTYPE => ''},  # Only .pm files in this directory
-);
+    'dist'      => { COMPRESS=>"gzip", SUFFIX=>"gz" }
+ );
 
