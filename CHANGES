@@ -1,5 +1,17 @@
-CHANGES 
--------
+ExtUtils::F77 Changes list 
+--------------------------
+
+v1.11 released Oct 15th 1999
+-----------------------------
+
+* Now removed from PGPLOT module distribution to avoid confusing CPAN,
+  now purely available standalone.
+* Got rid of some "for my $foo" ism's for 5.003 compatibility.
+* Christian's cygwin patches.
+* Patch to restore fallback to g77 behaviour if o/s compiler not found.
+  (e.g. solaris)
+* IRIX changes from Ovidiu Toader <ovi@physics.utoronto.ca>
+* Fixed g77 to use -lg2c in prefererence
 
 v1.10 released May 14th 1999
 -----------------------------
