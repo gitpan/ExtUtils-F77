@@ -1,6 +1,17 @@
 ExtUtils::F77 Changes list 
 --------------------------
 
+v1.13 released May 8th 2000
+---------------------------
+
+* Small IRIX patch from Christian Soeller.
+* Tim Butler's Solaris patch (to make sure directories in path really
+  do contain libF77.a)
+* Charles Lane's latest VMS patch (properly blanks VMS libs)
+* Changed my email address.
+* Added Gokhan Ulu's <ulu@ultra.bu.edu> patch to use Solaris 
+  LD_LIBRARY_PATH variable to assist in locating F77 libs.
+
 v1.12 released Oct 26th 1999
 ----------------------------
 

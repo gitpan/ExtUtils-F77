@@ -32,7 +32,7 @@ variable F77LIBS, e.g.
 
 =cut
 
-$VERSION = "1.12";
+$VERSION = "1.13";
 
 # Database starts here. Basically we have a large hash specifying
 # entries for each os/compiler combination. Entries can be code refs
@@ -78,12 +78,27 @@ $F77config{Sunos}{F77}{Cflags} = '-O';
 
 ### Solaris ###
 
-$F77config{Solaris}{F77}{Link} = sub {  
-       $dir = find_highest_SC("/opt/SUNWspro/SC*/lib");
+$F77config{Solaris}{F77}{Link} = sub {
+    my $NSPATH = "";
+    $NSPATH = $ENV{'LD_LIBRARY_PATH'} if defined $ENV{'LD_LIBRARY_PATH'};
+#find the SUNWspro entry of nonstandard inst. in LD_LIBRARY_PATH
+    $NSPATH =~ /\:.*SUNWspro(\/|\:|\b)/;
+    $NSPATH = $& if $&;
+    $NSPATH =~ /.*SUNWspro(\/|\:|\b)/;
+    $NSPATH = $&;
+    $NSPATH =~ /SUNWspro/;
+    $NSPATH = $`;
+    $NSPATH =~ s/://gi;
+    $NSPATH = "/opt/" unless $NSPATH;
+    print "$Pkg: Found non-standard F77 path:--->$NSPATH\n" if $NSPATH ne
+"/opt/";
+       $dir = find_highest_SC("$NSPATH/SUNWspro/SC*/lib");
        return "" unless $dir; # Failure
        print "$Pkg: Found Fortran latest version lib dir $dir\n";
        return "-L$dir -lF77 -lM77 -lsunmath -lm";
 };
+
+
 $F77config{Solaris}{F77}{Trail_} = 1;
 $F77config{Solaris}{F77}{Compiler} = 'f77';
 $F77config{Solaris}{F77}{Cflags} = '-O';
@@ -178,7 +193,8 @@ if (ucfirst($Config{'osname'}) eq "Irix")
   $default_abi = $Config{osvers} >= 6.4 ? "-n32" : "-o32";
  GET_ABI:
   {
-    $abi = "-o32",last GET_ABI if $cflags =~ /-o32/;
+    # -32 seems to be synonymous for -o32 (CS)
+    $abi = "-o32",last GET_ABI if $cflags =~ /-o?32/;
     $abi = "-n32",last GET_ABI if $cflags =~ /-n32/;
     $abi = "-64",last GET_ABI if $cflags =~ /-64/;
     $abi = $default_abi;
@@ -218,7 +234,7 @@ $F77config{Freebsd}{DEFAULT}     = 'F77';
 ### VMS ###
 
 $F77config{VMS}{Fortran}{Trail_} = 0;
-$F77config{VMS}{Fortran}{Link}   = '';
+$F77config{VMS}{Fortran}{Link}   = ' ';         # <---need this space!
 $F77config{VMS}{DEFAULT}     = 'Fortran';
 $F77config{VMS}{Fortran}{Compiler} = 'Fortran';
 
@@ -273,6 +289,7 @@ sub import {
         if ($flibs ne "") {
      	   $Runtime = $flibs . gcclibs();
 	   $Runtime =~ s|L([a-z,A-Z]):|L//$1|g if $^O =~ /cygwin/i;
+           $Runtime = ' ' if $^O eq 'VMS';  # <-- need this space!
 	   print "Runtime: $Runtime\n";
            $ok = 1;
      	   $ok = validate_libs($Runtime) if $flibs ne "";
@@ -414,7 +431,8 @@ sub find_highest_SC {
            $n{$_} = $1 *100 + $2 * 10 + $3;
        }
     }
-    my @sorted_dirs = sort {$n{$a} <=> $n{$b}} @glob;
+    my @sorted_dirs = grep {-f "$_/libF77.a"} sort {$n{$a} <=> $n{$b}} @glob;
+
     return pop @sorted_dirs; # Highest N
 }
      
