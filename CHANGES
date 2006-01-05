@@ -1,6 +1,15 @@
 ExtUtils::F77 Changes list 
 --------------------------
 
+v1.15 released Jan 3rd, 2006
+----------------------------
+
+* Jim Edwards f90 patch for SGI irix64
+* Added version number print to the startup
+* Solaris patches from Diab Jerius
+* OSX warning patch from Doug Burke
+* Win32 patches from Rob - Sisyphus <kalinabears@iinet.net.au> (2005/1/25)
+
 v1.14 released Jun 15th 2001
 ----------------------------
 

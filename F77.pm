@@ -2,6 +2,7 @@
 package ExtUtils::F77;
 
 use Config;
+use File::Spec;
 
 =head1 NAME
 
@@ -32,7 +33,9 @@ variable F77LIBS, e.g.
 
 =cut
 
-$VERSION = "1.14";
+$VERSION = "1.15";
+
+warn "\nExtUtils::F77: Version $VERSION\n";
 
 # Database starts here. Basically we have a large hash specifying
 # entries for each os/compiler combination. Entries can be code refs
@@ -83,7 +86,7 @@ $F77config{Sunos}{F77}{Cflags} = '-O';
 $F77config{Solaris}{F77}{Link} = sub {
      my $NSPATH;
      my $dir;
- 
+
      #find the SUNWspro entry of nonstandard inst. in LD_LIBRARY_PATH
      if ( defined $ENV{'LD_LIBRARY_PATH'} &&
 	  $ENV{'LD_LIBRARY_PATH'} =~ m{([^:]*SUNWspro[^/]*)} )
@@ -122,7 +125,40 @@ $F77config{Solaris}{F77}{Link} = sub {
      }
      return "" unless $dir; # Failure
      print "$Pkg: Found Fortran latest version lib dir $dir\n";
-     return "-L$dir -lF77 -lM77 -lsunmath -lm";
+
+     my @libs;
+
+     # determine libraries. Forte 7 doesn't have F77 or M77
+     if ( qx/$F77config{Solaris}{F77}{Compiler} -V 2>&1/ 
+                      =~ /Forte Developer 7/ )
+     {
+       push @libs, qw/
+		      -lf77compat
+		      -lfui
+		      -lfai
+		      -lfai2
+		      -lfsumai
+		      -lfprodai
+		      -lfminlai
+		      -lfmaxlai
+		      -lfminvai
+		      -lfmaxvai
+		      -lfsu 
+		      -lsunmath
+		      -lm
+		      /;
+     }
+     else
+     {
+       push @libs, qw/
+		      -lF77
+		      -lM77
+		      -lsunmath
+		      -lm
+		      /;
+     }
+
+     join( ' ', "-L$dir", @libs );
  };
 
 
@@ -229,12 +265,12 @@ if (ucfirst($Config{'osname'}) eq "Irix")
   if ( $abi eq "-64" ){
     $libs = ( (-r "/usr/lib64/$mips_dir") && (-d _) && (-x _) ) ?
 	"-L/usr/lib64/$mips_dir" : "";
-    $libs .=  " -L/usr/lib64 -lftn -lm";
+    $libs .=  " -L/usr/lib64 -lfortran -lm";
   }
   if ( $abi eq "-n32" ){
     $libs = ( (-r "/usr/lib32/$mips_dir") && (-d _) && (-x _) ) ?
 	"-L/usr/lib32/$mips_dir" : "";
-    $libs .=  " -L/usr/lib32 -lftn -lm";
+    $libs .=  " -L/usr/lib32 -lfortran -lm";
   }
   if ( $abi eq "-o32" ){
     $libs = "-L/usr/lib -lF77 -lI77 -lU77 -lisam -lm";
@@ -291,6 +327,7 @@ sub get; # See below
 # a lot of the answers depend on a lot of the guesswork.
 
 sub import {
+   no warnings; # Shuts up complaints on Win32 when running PDL tests
    $Pkg    = shift;
    my $system   = ucfirst(shift);  # Set package variables
    my $compiler = ucfirst(shift);
@@ -302,17 +339,18 @@ sub import {
    $system = 'Cygwin' if $system =~ /Cygwin/;
    $compiler = get $F77config{$system}{DEFAULT} unless $compiler;
 
-   print "$Pkg: Using system=$system compiler=$compiler\n";
-   
+   print "$Pkg: Using system=$system compiler=" .
+       (defined $compiler ? $compiler : "<undefined>") . "\n";
+
    if (defined($ENV{F77LIBS})) {
       print "Overriding Fortran libs from value of enviroment variable F77LIBS = $ENV{F77LIBS}\n";
       $Runtime = $ENV{F77LIBS};
    }
    else {
-      
+
      # Try this combination
 
-     if (defined( $F77config{$system} )){
+     if ( defined( $compiler ) and defined( $F77config{$system} )){
      	my $flibs = get ($F77config{$system}{$compiler}{Link});
         if ($flibs ne "") {
      	   $Runtime = $flibs;# . gcclibs();
@@ -345,13 +383,13 @@ EOD
     	 print "$Pkg: Well that didn't appear to validate. Well I will try it anyway.\n"
     	      unless $Runtime && $ok;
        }
- 
+
       $RuntimeOK = $ok;
-      
+
    } # Not overriding   
 
    # Now get the misc info for the methods.
-      
+
    if (defined( $F77config{$system}{$compiler}{Trail_} )){
       $Trail_  = get $F77config{$system}{$compiler}{Trail_};  
    }
@@ -363,9 +401,9 @@ $Pkg: F77 names have trailing underscores.
 EOD
       $Trail_ = 1;
    }
-  
+
    if (defined( $F77config{$system}{$compiler}{Compiler} )) {
-	$Compiler = $F77config{$system}{$compiler}{Compiler};
+	$Compiler = get $F77config{$system}{$compiler}{Compiler};
    } else {
 	print << "EOD";
 $Pkg: There does not appear to be any configuration info about
@@ -376,7 +414,7 @@ EOD
 print "$Pkg: Compiler: $Compiler\n";
 
    if (defined( $F77config{$system}{$compiler}{Cflags} )) {
-	$Cflags = $F77config{$system}{$compiler}{Cflags};
+	$Cflags = get $F77config{$system}{$compiler}{Cflags} ;
    } else {
 	print << "EOD";
 $Pkg: There does not appear to be any configuration info about
@@ -387,7 +425,7 @@ EOD
    }
 
    print "$Pkg: Cflags: $Cflags\n";
-   
+
 } # End of import ()
 
 =head1 METHODS
@@ -466,7 +504,7 @@ sub find_highest_SC {
 
     return pop @sorted_dirs; # Highest N
 }
-     
+
 # Validate a string of form "-Ldir -lfoo -lbar"
 
 sub validate_libs {
@@ -502,8 +540,10 @@ sub validate_libs {
 
 
 sub testcompiler {
- 
-    my $file = "/tmp/testf77$$";
+
+    my $file = File::Spec->tmpdir . "/testf77$$";
+    $file =~ s/\\/\//g; # For Win32
+
     my $ret;
     open(OUT,">$file.f");
     print OUT "      print *, 'Hello World'\n";
@@ -555,7 +595,12 @@ sub gcclibs {
 
 sub find_in_path {
    my @names = @_;
-   my @path = split(":",$ENV{PATH});
+   my @path;
+   if($^O =~ /mswin32/i) {
+     for(@names) { $_ .= '.exe'}
+     @path = split(";", $ENV{PATH});
+     }
+   else {@path = split(":",$ENV{PATH})}
    my ($name,$dir);
    for $name (@names) {
       for $dir (@path) {
