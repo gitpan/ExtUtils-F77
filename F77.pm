@@ -21,7 +21,7 @@ A simple self-documenting Perl database of knowledge/code
 for figuring out how to link for various combinations of OS and
 compiler is embedded in the modules Perl code. Please help 
 save the world by sending database entries for
-your system to kgb@aaoepp.aao.gov.au
+your system to karl_pgplot@mac.com
 
 The library list which the module returns 
 can be explicitly overridden by setting the environment 
@@ -33,7 +33,7 @@ variable F77LIBS, e.g.
 
 =cut
 
-$VERSION = "1.15";
+$VERSION = "1.16";
 
 warn "\nExtUtils::F77: Version $VERSION\n";
 
@@ -218,7 +218,43 @@ $F77config{Cygwin}{DEFAULT}	= 'G77';
 
 $F77config{Linux}{G77}     = $F77config{Generic}{G77};
 $F77config{Linux}{F2c}     = $F77config{Generic}{G77};
+#
+# database entry for the gfortran compiler
+#
+$F77config{Linux}{GFortran}{Link} = sub {
+    $dir = `gfortran -print-file-name=libgfortran.a`;
+    chomp $dir;
+    # Note that -print-file-name returns just the library name
+    # if it cant be found - make sure that we only accept the
+    # directory if it returns a proper path (or matches a /)
+
+    if( defined $dir ) {
+        $dir =~ s,/libgfortran.a$,,;
+    } else {
+        $dir = "/usr/local/lib";
+    }    
+    return( "-L$dir -L/usr/lib -lgfortran -lm" );
+};
+$F77config{Linux}{GFortran}{Trail_}   = 1;
+$F77config{Linux}{GFortran}{Compiler} = 'gfortran';
+$F77config{Linux}{GFortran}{Cflags}   = '-O';
 $F77config{Linux}{DEFAULT} = 'G77';
+
+# check for 'non g77' DEFAULT compilers on Linux:
+if (ucfirst($Config{'osname'}) eq "Linux") 
+{
+  my $default;
+
+  # check for gfortran compiler:
+  $default = find_in_path('gfortran');
+
+  if( $default =~ /gfortran/ )
+  {
+     $F77config{Linux}{DEFAULT} = 'GFortran'; 
+  } 
+
+  # code for ifort, g95 etc........
+}
 
 ### DEC OSF/1 ###
 
@@ -300,6 +336,15 @@ $F77config{VMS}{Fortran}{Trail_} = 0;
 $F77config{VMS}{Fortran}{Link}   = ' ';         # <---need this space!
 $F77config{VMS}{DEFAULT}     = 'Fortran';
 $F77config{VMS}{Fortran}{Compiler} = 'Fortran';
+
+### Darwin (Mac OS X) ###
+
+$F77config{Darwin}{GFortran}{Trail_} = 1;
+$F77config{Darwin}{GFortran}{Cflags} = ' ';        # <---need this space!
+$F77config{Darwin}{GFortran}{Link}   = '-L/usr/local/lib -lgfortran';    
+$F77config{Darwin}{GFortran}{Compiler} = 'gfortran';
+
+$F77config{Darwin}{DEFAULT}     = 'G77';
 
 ############ End of database is here ############ 
 
@@ -611,7 +656,8 @@ sub find_in_path {
       }
    }
    return '' if $^O eq 'VMS';
-   die "Unable to find a fortran compiler using names: ".join(" ",@names);
+   return undef;
+#   die "Unable to find a fortran compiler using names: ".join(" ",@names);
 }
 
 

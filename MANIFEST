@@ -5,3 +5,4 @@ F77.pm
 MANIFEST
 t/require.t
 COPYING
+META.yml                                 Module meta-data (added by MakeMaker)

@@ -1,6 +1,13 @@
 ExtUtils::F77 Changes list 
 --------------------------
 
+v1.16 released May 16th
+------------------------
+
+* Added new config entry for Darwin/OSX (using gcc 4.0 and g77, gfortran or g95)
+* Added new entry for gfortran under Linux (thanks to Thomas Erben).
+* Works fine under g77 on intel Mac OS X.
+
 v1.15 released Jan 3rd, 2006
 ----------------------------
 
