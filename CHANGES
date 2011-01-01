@@ -1,8 +1,25 @@
 ExtUtils::F77 Changes list 
 --------------------------
 
-v1.16 released May 16th
-------------------------
+v1.17 released Jan 1st 2011
+---------------------------
+
+* Derek Lamb's patch to avoid an uninitialised variable error.
+* Diab Jarius's Solaris Studio 10 patch and his gfortran patch (with mods).
+  Note g77 is still the default if both it and gfortran are present. 
+* Rob's big Win32 patch (Nov 2010 version)
+*** IMPORTANT. Added in simplification of GNU fortran compilers (g77, gfortran, g95, fort77)
+  etc. suggested by Tim Jeness. I used his code but made a slightly different
+  implementaion introducing a 'Generic' 'GNU' database entry to which others point.
+  This also superceded some of the above patches.
+  Hope this works!
+* Removed places where .gcclibs() is added to the link line, this appears to no loner
+  be necessary. Routine left in there (but orphaned) just in case.
+  
+* Rob's further Win32 patch (16/12/2010)
+
+v1.16 released May 16th, 2007
+-----------------------------
 
 * Added new config entry for Darwin/OSX (using gcc 4.0 and g77, gfortran or g95)
 * Added new entry for gfortran under Linux (thanks to Thomas Erben).

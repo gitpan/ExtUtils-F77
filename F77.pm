@@ -23,6 +23,11 @@ compiler is embedded in the modules Perl code. Please help
 save the world by sending database entries for
 your system to karl_pgplot@mac.com
 
+Note the default on most systems is now to search for a generic 'GNU' compiler
+which can be g77, gfortran or g95 and then find the appropriate link
+libraries automatically. (This is the 'Generic' 'GNU' database entry
+in the code.)
+
 The library list which the module returns 
 can be explicitly overridden by setting the environment 
 variable F77LIBS, e.g.
@@ -33,7 +38,7 @@ variable F77LIBS, e.g.
 
 =cut
 
-$VERSION = "1.16";
+$VERSION = "1.17"; 
 
 warn "\nExtUtils::F77: Version $VERSION\n";
 
@@ -49,6 +54,83 @@ warn "\nExtUtils::F77: Version $VERSION\n";
 print "Loaded ExtUtils::F77 version $VERSION\n";
 
 %F77config=();
+
+########## Win32 Specific ##############
+if($^O =~ /MSWin/i) {
+  my @version;
+  if($Config{cc} =~ /x86_64\-w64\-mingw32\-gcc/) {
+    # This must be gcc-4.x.x
+    $gcc = 'x86_64-w64-mingw32-gcc';
+    $gfortran = 'x86_64-w64-mingw32-gfortran';
+    $fallback_compiler = 'GFortran';
+  }
+  elsif($Config{gccversion}) {
+    # Could be either gcc-4.x.x or gcc-3.x.x
+    $gcc = 'gcc';
+    @version = split /\./, $Config{gccversion}; 
+    $fallback_compiler = $version[0] == 4 ? 'GFortran' : 'G77';
+    $gfortran = 'gfortran';
+  }
+  else {
+   $gcc = 'gcc';
+   $gfortran = 'gfortran';
+   $fallback_compiler = 'G77';
+  }
+}
+else {
+  # No change from version 1.16.
+  $gcc = 'gcc';
+  $gfortran = 'gfortran';
+  $fallback_compiler = 'G77';
+}
+
+############## End of Win32 Specific ##############
+
+$F77config{MinGW}{G77}{Link} = sub {
+    my @libs = ('g2c', 'f2c');
+    my ($dir, $lib, $test);
+    foreach $test (@libs) {
+      $dir = `g77 -print-file-name=lib$test.a`;
+      chomp $dir;
+      # Note that -print-file-name returns just the library name
+      # if it cant be found - make sure that we only accept the
+      # directory if it returns a proper path (or matches a /)
+      if (defined $dir && $dir ne "lib$test.a") {
+        $lib = $test; # Found an existing library
+        last; 
+      }
+    }
+
+    if( defined $dir  && defined $lib) {
+        $dir =~ s,/lib$lib.a$,,;
+    } else {
+        $dir = "/usr/local/lib";
+        $lib = "f2c";
+    }  
+    return( "-L$dir -L/usr/lib -l$lib -lm" );
+};
+
+$F77config{MinGW}{GFortran}{Link} = sub {
+    $dir = `$gfortran -print-file-name=libgfortran.a`;
+    chomp $dir;
+    # Note that -print-file-name returns just the library name
+    # if it cant be found - make sure that we only accept the
+    # directory if it returns a proper path (or matches a /)
+
+    if( defined $dir ) {
+        $dir =~ s,/libgfortran.a$,,;
+    } else {
+        $dir = "/usr/local/lib";
+    }    
+    return( "-L$dir -L/usr/lib -lgfortran -lm" );
+};
+
+$F77config{MinGW}{G77}{Trail_} = 1;
+$F77config{MinGW}{GFortran}{Trail_} = 1;
+$F77config{MinGW}{G77}{Compiler} = find_in_path('g77','f77','fort77');
+$F77config{MinGW}{GFortran}{Compiler} = "$gfortran";
+$F77config{MinGW}{G77}{Cflags} = '-O';
+$F77config{MinGW}{GFortran}{Cflags}   = '-O';
 
 ### SunOS (use this as a template for new entries) ###
 
@@ -128,9 +210,12 @@ $F77config{Solaris}{F77}{Link} = sub {
 
      my @libs;
 
-     # determine libraries. Forte 7 doesn't have F77 or M77
-     if ( qx/$F77config{Solaris}{F77}{Compiler} -V 2>&1/ 
-                      =~ /Forte Developer 7/ )
+     # determine libraries. F77 and M77 aren't available in the latest
+     # compilers
+     my $vcruft = qx/$F77config{Solaris}{F77}{Compiler} -V 2>&1/;
+     if ( $vcruft =~ /Forte Developer 7/
+         || $vcruft =~ /f90:/
+      )
      {
        push @libs, qw/
 		      -lf77compat
@@ -169,34 +254,11 @@ $F77config{Solaris}{DEFAULT} = 'F77';
 
 ### Generic GNU-77 or F2C system ###
 
-$F77config{Generic}{G77}{Link} = sub {
-    my @libs = ('g2c', 'f2c');
-    my ($dir, $lib, $test);
-    foreach $test (@libs) {
-      $dir = `g77 -print-file-name=lib$test.a`;
-      chomp $dir;
-      # Note that -print-file-name returns just the library name
-      # if it cant be found - make sure that we only accept the
-      # directory if it returns a proper path (or matches a /)
-      if (defined $dir && $dir ne "lib$test.a") {
-        $lib = $test; # Found an existing library
-        last; 
-      }
-    }
-
-    if( defined $dir  && defined $lib) {
-        $dir =~ s,/lib$lib.a$,,;
-    } else {
-        $dir = "/usr/local/lib";
-        $lib = "f2c";
-    }    
-    return( "-L$dir -L/usr/lib -l$lib -lm" );
-};
-$F77config{Generic}{G77}{Trail_} = 1;
-$F77config{Generic}{G77}{Compiler} = find_in_path('g77','f77','fort77');
-$F77config{Generic}{G77}{Cflags} = '-O';
-$F77config{Generic}{DEFAULT} = 'G77';
-$F77config{Generic}{F2c}     = $F77config{Generic}{G77};
+$F77config{Generic}{GNU}{Trail_} = 1;
+$F77config{Generic}{GNU}{Cflags} = ' ';        # <---need this space!
+$F77config{Generic}{GNU}{Link}   = link_gnufortran_compiler('g77', 'gfortran', 'g95', 'fort77');    
+$F77config{Generic}{GNU}{Compiler} = find_in_path('g77', "$gfortran", 'g95','fort77');
+$F77config{Generic}{DEFAULT}     = 'GNU';
 
 ### cygwin ###
 #"-lg2c -lm";
@@ -216,45 +278,8 @@ $F77config{Cygwin}{DEFAULT}	= 'G77';
 
 ### Linux ###
 
-$F77config{Linux}{G77}     = $F77config{Generic}{G77};
-$F77config{Linux}{F2c}     = $F77config{Generic}{G77};
-#
-# database entry for the gfortran compiler
-#
-$F77config{Linux}{GFortran}{Link} = sub {
-    $dir = `gfortran -print-file-name=libgfortran.a`;
-    chomp $dir;
-    # Note that -print-file-name returns just the library name
-    # if it cant be found - make sure that we only accept the
-    # directory if it returns a proper path (or matches a /)
-
-    if( defined $dir ) {
-        $dir =~ s,/libgfortran.a$,,;
-    } else {
-        $dir = "/usr/local/lib";
-    }    
-    return( "-L$dir -L/usr/lib -lgfortran -lm" );
-};
-$F77config{Linux}{GFortran}{Trail_}   = 1;
-$F77config{Linux}{GFortran}{Compiler} = 'gfortran';
-$F77config{Linux}{GFortran}{Cflags}   = '-O';
-$F77config{Linux}{DEFAULT} = 'G77';
-
-# check for 'non g77' DEFAULT compilers on Linux:
-if (ucfirst($Config{'osname'}) eq "Linux") 
-{
-  my $default;
-
-  # check for gfortran compiler:
-  $default = find_in_path('gfortran');
-
-  if( $default =~ /gfortran/ )
-  {
-     $F77config{Linux}{DEFAULT} = 'GFortran'; 
-  } 
-
-  # code for ifort, g95 etc........
-}
+$F77config{Linux}{GNU}     = $F77config{Generic}{GNU};
+$F77config{Linux}{DEFAULT} = 'GNU';
 
 ### DEC OSF/1 ###
 
@@ -339,12 +364,9 @@ $F77config{VMS}{Fortran}{Compiler} = 'Fortran';
 
 ### Darwin (Mac OS X) ###
 
-$F77config{Darwin}{GFortran}{Trail_} = 1;
-$F77config{Darwin}{GFortran}{Cflags} = ' ';        # <---need this space!
-$F77config{Darwin}{GFortran}{Link}   = '-L/usr/local/lib -lgfortran';    
-$F77config{Darwin}{GFortran}{Compiler} = 'gfortran';
+$F77config{Darwin}{GNU} = $F77config{Generic}{GNU};
+$F77config{Darwin}{DEFAULT}     = 'GNU';
 
-$F77config{Darwin}{DEFAULT}     = 'G77';
 
 ############ End of database is here ############ 
 
@@ -354,6 +376,7 @@ $F77config{Darwin}{DEFAULT}     = 'G77';
   use ExtUtils::F77 qw(sunos);     # Specify system
   use ExtUtils::F77 qw(linux g77); # Specify system and compiler
   $fortranlibs = ExtUtils::F77->runtime;
+
 
 =cut
 
@@ -402,7 +425,8 @@ sub import {
 	   # We don't want to append gcc libs if we are using
 	   # non gnu compilers. Initially, explicitly check for
 	   # use of sun compiler
-	   $Runtime .= gcclibs($flibs) unless $flibs =~ /sunmath/;
+	   #$Runtime .= gcclibs($flibs) unless $flibs =~ /sunmath/;
+	   #(Note appending gcclibs seems to be no longer required)
 	   $Runtime =~ s|L([a-z,A-Z]):|L//$1|g if $^O =~ /cygwin/i;
            $Runtime = ' ' if $^O eq 'VMS';  # <-- need this space!
 	   print "Runtime: $Runtime\n";
@@ -418,12 +442,14 @@ sub import {
       unless (("$Runtime" ne "-LSNAFU -lwontwork") && $ok) {
      	print <<"EOD";
 $Pkg: Unable to guess and/or validate system/compiler configuration
-$Pkg: Will try system=Generic Compiler=G77
+$Pkg: Will try system=Generic Compiler=$fallback_compiler
 EOD
-    	 $system   = "Generic";
-    	 $compiler = "G77";
+    	 $system   =
+            $Config{cc} =~ /\bgcc/ && $^O =~ /MSWin32/i ? "MinGW"
+                                                        :"Generic";
+    	 $compiler = $fallback_compiler;
     	 my $flibs = get ($F77config{$system}{$compiler}{Link});
-    	 $Runtime =  $flibs . gcclibs($flibs);
+    	 $Runtime =  $flibs ; #. gcclibs($flibs); #  Note gcclibs appears to be no longer required.
     	 $ok = validate_libs($Runtime) if $flibs ne "";
     	 print "$Pkg: Well that didn't appear to validate. Well I will try it anyway.\n"
     	      unless $Runtime && $ok;
@@ -610,11 +636,16 @@ sub testcompiler {
     return $ret;
 };
 
-# Return gcc libs (e.g. -L/usr/local/lib/gcc-lib/sparc-sun-sunos4.1.3_U1/2.7.0 -lgcc)
+# gcclibs() routine
+#    Return gcc link libs (e.g. -L/usr/local/lib/gcc-lib/sparc-sun-sunos4.1.3_U1/2.7.0 -lgcc)
+#    Note this routine appears to be no longer requred - gcc3 or 4 change? - and is 
+#    NO LONGER CALLED from anywhere in the code. Use of this routine in the future
+#    is DEPRECATED. Retain here just in case this logic is ever needed again,
+#    - Karl Glazebrook Dec/2010
 
 sub gcclibs {
    my $flibs = shift; # Fortran libs
-   my $isgcc = $Config{'cc'} eq 'gcc';
+   my $isgcc = $Config{'cc'} eq "$gcc";
    if (!$isgcc && $^O ne 'VMS') {
       print "Checking for gcc in disguise:\n";
       $isgcc = 1 if $Config{gccversion};
@@ -628,9 +659,15 @@ sub gcclibs {
       print $string;
    }
    if ($isgcc or ($flibs =~ /-lg2c/) or ($flibs =~ /-lf2c/) ) {
-       $gccdir = `gcc -print-libgcc-file-name`; chomp $gccdir;
-       $gccdir =~ s/\/libgcc.a//;
-       return " -L$gccdir -lgcc";   
+       # Don't link to libgcc on MS Windows iff we're using gfortran.
+       unless($fallback_compiler eq 'GFortran' && $^O =~ /MSWin/i) {
+         $gccdir = `$gcc -m32 -print-libgcc-file-name`; chomp $gccdir;
+         $gccdir =~ s/\/libgcc.a//;
+         return " -L$gccdir -lgcc";
+       }else{
+         return "";
+       } 
+
    }else{
        return "";
    }
@@ -648,9 +685,11 @@ sub find_in_path {
    else {@path = split(":",$ENV{PATH})}
    my ($name,$dir);
    for $name (@names) {
+      return $name if exists $CACHE{$name};
       for $dir (@path) {
          if (-x $dir."/$name") {
 	    print "Found compiler $name\n";
+        $CACHE{$name}++;
 	    return $name;
 	  }
       }
@@ -660,10 +699,45 @@ sub find_in_path {
 #   die "Unable to find a fortran compiler using names: ".join(" ",@names);
 }
 
+# Based on code from Tim Jeness, tries to figure out the correct GNU
+# fortran compiler libs
+sub link_gnufortran_compiler {
+    return () if $^O =~ /MSWin32/i; # Unneeded for MinGW, emits warnings if allowed to proceed.
+    my @try = @_;
+    my $compiler = find_in_path( @try );
+    # all the compilers and their libraries
+    my %complibs = (
+                    g77 => [qw/ g2c f2c /],
+                    f77 => [qw/ g2c f2c /],
+                    fort77 => [qw/ g2c f2c /],
+                    gfortran => [qw/ gfortran /],
+                    g95 => [qw/ f95 /],
+                   );
+    return () unless defined $compiler;
+    my @libs = @{$complibs{$compiler}};
+     my ($dir, $lib, $test);
+     foreach $test (@libs) {
+      $dir = `$compiler -print-file-name=lib$test.a`;
+       chomp $dir;
+       # Note that -print-file-name returns just the library name
+       # if it cant be found - make sure that we only accept the
+       # directory if it returns a proper path (or matches a /)
+       if (defined $dir && $dir ne "lib$test.a") {
+        $lib = $test; # Found an existing library
+        $dir =~ s,/lib$lib.a$,,;
+        last;
+     } else {
+         $dir = "/usr/local/lib";
+         $lib = "f2c";
+    }
+    }
+     return( "-L$dir -L/usr/lib -l$lib -lm" );
+}
+
 
 =head1 AUTHOR
 
-Karl Glazebrook (kgb@aaoepp.aao.GOV.AU).
+Karl Glazebrook (karlglazebrook@mac.com).
 
 =cut
 
