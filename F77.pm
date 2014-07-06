@@ -38,7 +38,7 @@ variable F77LIBS, e.g.
 
 =cut
 
-$VERSION = "1.17"; 
+$VERSION = "1.17_01"; 
 
 warn "\nExtUtils::F77: Version $VERSION\n";
 
@@ -261,20 +261,12 @@ $F77config{Generic}{GNU}{Compiler} = find_in_path('g77', "$gfortran", 'g95','for
 $F77config{Generic}{DEFAULT}     = 'GNU';
 
 ### cygwin ###
-#"-lg2c -lm";
-# needed this on my cygwin system to get things working properly
-sub getcyglink {
-   return join ' ', map {my $lp = `g77 -print-file-name=lib$_.a`;
-			$lp =~ s|/[^/]+$||;
-			 $lp =~ s|L([a-z,A-Z]):|L//$1|g;
-			 "-L$lp -l$_"} qw/g2c m/;
-}
 
-$F77config{Cygwin}{G77}{Trail_} = 1;
-$F77config{Cygwin}{G77}{Compiler} = 'g77';
-$F77config{Cygwin}{G77}{Cflags} = '-O';
-$F77config{Cygwin}{G77}{Link}	= \&getcyglink;
-$F77config{Cygwin}{DEFAULT}	= 'G77';
+$F77config{Cygwin}{GNU}{Trail_} = 1;
+$F77config{Cygwin}{GNU}{Cflags} = '-O';        # <---need this space!
+$F77config{Cygwin}{GNU}{Link}   = link_gnufortran_compiler('g77', 'gfortran', 'g95', 'fort77');    
+$F77config{Cygwin}{GNU}{Compiler} = find_in_path('g77', "$gfortran", 'g95','fort77');
+$F77config{Cygwin}{DEFAULT}     = 'GNU';
 
 ### Linux ###
 
@@ -638,7 +630,7 @@ sub testcompiler {
 
 # gcclibs() routine
 #    Return gcc link libs (e.g. -L/usr/local/lib/gcc-lib/sparc-sun-sunos4.1.3_U1/2.7.0 -lgcc)
-#    Note this routine appears to be no longer requred - gcc3 or 4 change? - and is 
+#    Note this routine appears to be no longer required - gcc3 or 4 change? - and is 
 #    NO LONGER CALLED from anywhere in the code. Use of this routine in the future
 #    is DEPRECATED. Retain here just in case this logic is ever needed again,
 #    - Karl Glazebrook Dec/2010
@@ -727,8 +719,18 @@ sub link_gnufortran_compiler {
         $dir =~ s,/lib$lib.a$,,;
         last;
      } else {
+      # Try the same thing again but looking for the .so file
+      # rather than the .a file.
+      $dir = `$compiler -print-file-name=lib$test.so`;
+       chomp $dir;
+       if (defined $dir && $dir ne "lib$test.so") {
+        $lib = $test; # Found an existing library
+        $dir =~ s,/lib$lib.so$,,;
+        last;
+     } else {
          $dir = "/usr/local/lib";
          $lib = "f2c";
+    }
     }
     }
      return( "-L$dir -L/usr/lib -l$lib -lm" );
